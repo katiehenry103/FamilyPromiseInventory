@@ -1176,41 +1176,35 @@ document.addEventListener('click', e => {
 
 // DELETE LOCATION
 async function deleteLocation(id, name) {
-  if (!confirm(`Delete "${name}" and all its items? This cannot be undone.`)) return;
+  if (!confirm(`Delete "${name}"?`)) return;
   closeLocDropdown();
 
-  try {
-    await db.from('inventory').delete().eq('loc_id', id);
-    await db.from('locations').delete().eq('id', id);
-  } catch(e) {
-    showToast('Error deleting location', '');
-    console.error(e);
-    return;
-  }
-
-  // Remove from local state immediately
+  // Remove from UI immediately
   locations = locations.filter(l => l.id !== id);
   delete inventories[id];
 
-  // Switch to another location if we deleted the current one
   if (currentLocId === id) {
     currentLocId = locations.length > 0 ? locations[0].id : null;
   }
 
-  // Full reload from DB to make sure everything is in sync
-  await loadData(true);
-
+  // Update UI right away
   if (locations.length === 0) {
     currentLocId = null;
     showEmptyState();
   } else {
-    if (!currentLocId) currentLocId = locations[0].id;
     updateLocationUI();
-    renderAll();
+    renderDashboard();
+    renderInventory();
     renderLocDropdown();
   }
 
   showToast(`${name} deleted`, '');
+
+  // Delete from DB in background
+  try {
+    await db.from('inventory').delete().eq('loc_id', id);
+    await db.from('locations').delete().eq('id', id);
+  } catch(e) { console.error(e); }
 }
 
 // ADD LOCATION
