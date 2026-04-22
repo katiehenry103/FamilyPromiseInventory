@@ -628,26 +628,40 @@
       </div>
       <div class="scan-grid">
         <div>
-          <!-- iPhone-compatible: takes photo with back camera, ZXing reads barcode from image -->
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px 20px;text-align:center;box-shadow:var(--shadow);">
-            <div style="width:64px;height:64px;background:var(--accent-light);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8">
-                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/>
-                <line x1="14" y1="14" x2="14" y2="14.01"/><line x1="17" y1="14" x2="21" y2="14"/>
-                <line x1="14" y1="17" x2="14" y2="21"/><line x1="17" y1="17" x2="21" y2="21"/>
-                <line x1="21" y1="17" x2="21" y2="17.01"/>
-              </svg>
+          <!-- Live barcode scanner - works on iPhone Safari 16.4+ and all modern browsers -->
+          <div id="scanner-box" style="position:relative;background:#111;border-radius:var(--radius);overflow:hidden;width:100%;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;">
+            <video id="scanner-video" style="width:100%;height:100%;object-fit:cover;display:none;" playsinline autoplay muted></video>
+            <canvas id="scanner-canvas" style="display:none;"></canvas>
+            <div id="scanner-idle" style="text-align:center;padding:24px;">
+              <div style="width:56px;height:56px;background:rgba(255,255,255,0.08);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.8">
+                  <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                  <rect x="3" y="14" width="7" height="7" rx="1"/>
+                  <line x1="14" y1="14" x2="14" y2="14.01"/><line x1="17" y1="14" x2="21" y2="14"/>
+                  <line x1="14" y1="17" x2="14" y2="21"/><line x1="17" y1="17" x2="21" y2="21"/>
+                </svg>
+              </div>
+              <div style="color:rgba(255,255,255,0.7);font-size:14px;font-weight:600;margin-bottom:6px;">Ready to Scan</div>
+              <div style="color:rgba(255,255,255,0.35);font-size:12px;">Tap Start Scanner below</div>
             </div>
-            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px;">Scan a Barcode</div>
-            <div style="font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.5;">Tap the button below, point your camera at the barcode and take a photo. The barcode will be read automatically.</div>
-            <!-- This input opens the native iPhone camera -->
-            <input type="file" id="barcode-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleBarcodePhoto(event)">
-            <button class="btn-sm btn-purple" style="width:100%;padding:13px;font-size:14px;" onclick="document.getElementById('barcode-photo-input').click()">Take Photo of Barcode</button>
-            <div id="scan-status" style="margin-top:12px;font-size:13px;color:var(--text2);min-height:20px;"></div>
+            <!-- Viewfinder overlay shown while scanning -->
+            <div id="scanner-overlay" style="display:none;position:absolute;inset:0;pointer-events:none;">
+              <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);width:72%;height:22%;border:2.5px solid #f5c518;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);">
+                <div style="position:absolute;top:-3px;left:-3px;width:20px;height:20px;border-top:4px solid white;border-left:4px solid white;border-radius:3px 0 0 0;"></div>
+                <div style="position:absolute;top:-3px;right:-3px;width:20px;height:20px;border-top:4px solid white;border-right:4px solid white;border-radius:0 3px 0 0;"></div>
+                <div style="position:absolute;bottom:-3px;left:-3px;width:20px;height:20px;border-bottom:4px solid white;border-left:4px solid white;border-radius:0 0 0 3px;"></div>
+                <div style="position:absolute;bottom:-3px;right:-3px;width:20px;height:20px;border-bottom:4px solid white;border-right:4px solid white;border-radius:0 0 3px 0;"></div>
+              </div>
+              <div style="position:absolute;bottom:14px;left:0;right:0;text-align:center;color:white;font-size:12px;background:rgba(0,0,0,0.55);padding:7px;">Align barcode in the box</div>
+            </div>
           </div>
-          <div style="margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;box-shadow:var(--shadow);">
-            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px;">Or enter barcode number manually:</div>
+          <div style="margin-top:10px;display:flex;gap:8px;">
+            <button class="btn-sm btn-purple" id="start-scan-btn" style="flex:1;padding:12px;" onclick="startBarcodeScanner()">Start Scanner</button>
+            <button class="btn-sm btn-outline" id="stop-scan-btn" style="display:none;flex:1;padding:12px;" onclick="stopBarcodeScanner()">Stop</button>
+          </div>
+          <div id="scan-status" style="margin-top:8px;font-size:13px;color:var(--text2);min-height:18px;text-align:center;"></div>
+          <div style="margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">Or enter barcode number manually:</div>
             <div style="display:flex;gap:8px;">
               <input type="number" id="manual-barcode-main" placeholder="e.g. 0123456789012" style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:var(--mono);outline:none;">
               <button class="btn-sm btn-outline" onclick="lookupBarcode(document.getElementById('manual-barcode-main').value)">Look up</button>
@@ -1160,36 +1174,92 @@ document.getElementById('adjust-modal').addEventListener('click', e => { if(e.ta
 document.getElementById('add-loc-modal').addEventListener('click', e => { if(e.target===document.getElementById('add-loc-modal')) closeAddLocation(); });
 document.addEventListener('keydown', e => { if(e.key==='Escape') { closeModal(); closeAddLocation(); } });
 
-// ── BARCODE SCANNER (iPhone Safari compatible) ───────────────────────────────
-async function handleBarcodePhoto(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const status = document.getElementById('scan-status');
-  status.textContent = 'Reading barcode...';
+// ── BARCODE SCANNER ───────────────────────────────────────────────────────────
+let scanStream = null;
+let scanAnimFrame = null;
+
+async function startBarcodeScanner() {
+  const video    = document.getElementById('scanner-video');
+  const canvas   = document.getElementById('scanner-canvas');
+  const idle     = document.getElementById('scanner-idle');
+  const overlay  = document.getElementById('scanner-overlay');
+  const startBtn = document.getElementById('start-scan-btn');
+  const stopBtn  = document.getElementById('stop-scan-btn');
+  const status   = document.getElementById('scan-status');
+
+  status.textContent = 'Starting camera...';
 
   try {
-    const { BrowserMultiFormatReader } = ZXing;
-    const reader = new BrowserMultiFormatReader();
-    // Create an image element from the photo
-    const imgUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.src = imgUrl;
-    await new Promise(res => { img.onload = res; });
-    const result = await reader.decodeFromImageElement(img);
-    URL.revokeObjectURL(imgUrl);
-    event.target.value = '';
-    if (result) {
-      status.textContent = '';
-      await lookupBarcode(result.getText());
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    video.srcObject = scanStream;
+    await video.play();
+    video.style.display = 'block';
+    idle.style.display = 'none';
+    overlay.style.display = 'block';
+    startBtn.style.display = 'none';
+    stopBtn.style.display = 'block';
+    status.textContent = 'Scanning — hold barcode steady inside the box...';
+
+    const ctx = canvas.getContext('2d');
+    const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = ZXing;
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,  BarcodeFormat.UPC_E,
+      BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+      BarcodeFormat.ITF, BarcodeFormat.QR_CODE
+    ]);
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    const reader = new BrowserMultiFormatReader(hints);
+
+    let lastAttempt = 0;
+    function scanFrame() {
+      if (!scanStream) return;
+      scanAnimFrame = requestAnimationFrame(scanFrame);
+      const now = Date.now();
+      if (now - lastAttempt < 300) return; // scan every 300ms
+      lastAttempt = now;
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      try {
+        const result = reader.decodeFromImageData(imageData);
+        if (result) {
+          stopBarcodeScanner();
+          lookupBarcode(result.getText());
+        }
+      } catch(e) {
+        // NotFoundException is normal - just means no barcode in frame yet
+      }
     }
-  } catch(e) {
-    event.target.value = '';
-    document.getElementById('scan-status').textContent = 'Could not read barcode — try again or enter manually below.';
-    console.error(e);
+    scanFrame();
+
+  } catch(err) {
+    status.textContent = 'Camera access denied — please allow camera in your browser settings, or enter barcode manually below.';
+    console.error(err);
+    stopBarcodeScanner();
   }
 }
 
-function stopBarcodeScanner() {} // kept for tab-switching compatibility
+function stopBarcodeScanner() {
+  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+  if (scanAnimFrame) { cancelAnimationFrame(scanAnimFrame); scanAnimFrame = null; }
+  const video    = document.getElementById('scanner-video');
+  const idle     = document.getElementById('scanner-idle');
+  const overlay  = document.getElementById('scanner-overlay');
+  const startBtn = document.getElementById('start-scan-btn');
+  const stopBtn  = document.getElementById('stop-scan-btn');
+  if (video)   { video.style.display = 'none'; video.srcObject = null; }
+  if (idle)    idle.style.display = 'block';
+  if (overlay) overlay.style.display = 'none';
+  if (startBtn){ startBtn.style.display = 'block'; }
+  if (stopBtn) { stopBtn.style.display = 'none'; }
+}
 
 async function lookupBarcode(code) {
   if (!code || code.trim() === '') { showToast('Please enter a barcode', ''); return; }
