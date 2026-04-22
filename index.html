@@ -624,27 +624,43 @@
     <!-- SCAN -->
     <div id="tab-scan" style="display:none">
       <div class="section-header">
-        <div><h2>Scan Item</h2><p>Add to <span id="scan-loc-label" style="color:var(--accent);font-weight:700">current location</span></p></div>
+        <div><h2>Add Item</h2><p>Scan a barcode or enter details manually for <span id="scan-loc-label" style="color:var(--accent);font-weight:600">current location</span></p></div>
       </div>
       <div class="scan-grid">
         <div>
-          <div class="scan-area" onclick="document.getElementById('cam-input').click()">
-            <div class="scan-frame"></div>
-            <div class="scan-label">Tap to take photo</div>
-            <div class="scan-sublabel">or upload an image</div>
-            <img id="scan-preview" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;border-radius:var(--radius);">
+          <!-- BARCODE SCANNER VIEW -->
+          <div id="scanner-container" style="position:relative;background:#111;border-radius:var(--radius);overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;">
+            <video id="scanner-video" style="width:100%;height:100%;object-fit:cover;display:none;" playsinline></video>
+            <div id="scanner-idle" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px;text-align:center;">
+              <div style="width:60px;height:60px;border:2px solid rgba(255,255,255,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5">
+                  <path d="M3 9V6a2 2 0 012-2h2M3 15v3a2 2 0 002 2h2M15 3h3a2 2 0 012 2v2M15 19h3a2 2 0 002-2v-2"/>
+                  <line x1="8" y1="12" x2="8" y2="12.01"/><line x1="12" y1="12" x2="16" y2="12"/>
+                </svg>
+              </div>
+              <div style="color:rgba(255,255,255,0.6);font-size:13px;font-weight:500;">Tap "Scan Barcode" to use camera</div>
+              <div style="color:rgba(255,255,255,0.3);font-size:11px;">Works best on mobile</div>
+            </div>
+            <div id="scanner-overlay" style="display:none;position:absolute;inset:0;pointer-events:none;">
+              <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:80px;border:2px solid #f5c518;border-radius:6px;"></div>
+              <div style="position:absolute;bottom:16px;left:0;right:0;text-align:center;color:white;font-size:12px;font-weight:500;background:rgba(0,0,0,0.5);padding:6px;">Align barcode within the box</div>
+            </div>
           </div>
-          <input type="file" id="cam-input" accept="image/*" capture="environment" class="camera-input" onchange="handleCapture(event)">
           <div style="margin-top:10px;display:flex;gap:8px">
-            <button class="btn-sm btn-outline" style="flex:1" onclick="document.getElementById('cam-input').click()">Camera</button>
-            <button class="btn-sm btn-outline" style="flex:1" onclick="simulateScan()">Demo Scan</button>
+            <button class="btn-sm btn-purple" style="flex:1" id="scan-btn" onclick="startBarcodeScanner()">Scan Barcode</button>
+            <button class="btn-sm btn-outline" style="flex:1" id="stop-btn" onclick="stopBarcodeScanner()" style="display:none">Stop</button>
+          </div>
+          <div style="margin-top:8px;text-align:center;">
+            <span style="font-size:11px;color:var(--text2)">or enter barcode manually: </span>
+            <input type="text" id="manual-barcode" placeholder="e.g. 0123456789" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:5px;width:140px;font-family:var(--mono)">
+            <button onclick="lookupBarcode(document.getElementById('manual-barcode').value)" style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;margin-left:4px;">Look up</button>
           </div>
         </div>
         <div class="form-panel">
           <div class="ai-result" id="ai-result">
-            <div class="ai-result-label">AI Identified</div>
+            <div class="ai-result-label">Barcode Result</div>
             <div class="ai-result-name" id="ai-name-result">—</div>
-            <div class="ai-result-conf" id="ai-conf-result">confidence: —</div>
+            <div class="ai-result-conf" id="ai-conf-result">—</div>
           </div>
           <div class="form-row">
             <div class="form-field">
@@ -1009,6 +1025,7 @@ async function confirmAddLocation() {
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
 function showTab(id, btn) {
+  if (id !== 'scan') stopBarcodeScanner();
   document.querySelectorAll('[id^="tab-"]').forEach(t => t.style.display = 'none');
   document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).style.display = '';
@@ -1155,28 +1172,126 @@ document.getElementById('adjust-modal').addEventListener('click', e => { if(e.ta
 document.getElementById('add-loc-modal').addEventListener('click', e => { if(e.target===document.getElementById('add-loc-modal')) closeAddLocation(); });
 document.addEventListener('keydown', e => { if(e.key==='Escape') { closeModal(); closeAddLocation(); } });
 
-// ── SCAN ──────────────────────────────────────────────────────────────────────
-function handleCapture(e) {
-  const file = e.target.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    document.getElementById('scan-preview').src = ev.target.result;
-    document.getElementById('scan-preview').style.display = 'block';
-    setTimeout(() => showAIResult(AI_DEMO_ITEMS[Math.floor(Math.random()*AI_DEMO_ITEMS.length)]), 1200);
-  };
-  reader.readAsDataURL(file);
+// ── BARCODE SCANNER ───────────────────────────────────────────────────────────
+let scannerStream = null;
+let scannerInterval = null;
+
+async function startBarcodeScanner() {
+  const btn = document.getElementById('scan-btn');
+  const stopBtn = document.getElementById('stop-btn');
+  const video = document.getElementById('scanner-video');
+  const idle = document.getElementById('scanner-idle');
+  const overlay = document.getElementById('scanner-overlay');
+
+  try {
+    scannerStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    video.srcObject = scannerStream;
+    await video.play();
+    video.style.display = 'block';
+    idle.style.display = 'none';
+    overlay.style.display = 'block';
+    btn.textContent = 'Scanning...';
+    btn.disabled = true;
+    stopBtn.style.display = 'block';
+
+    // Use BarcodeDetector if available (Chrome/Android), fallback to ZXing
+    if ('BarcodeDetector' in window) {
+      const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code'] });
+      scannerInterval = setInterval(async () => {
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes.length > 0) {
+            const code = barcodes[0].rawValue;
+            stopBarcodeScanner();
+            await lookupBarcode(code);
+          }
+        } catch(e) {}
+      }, 500);
+    } else {
+      // Fallback: show manual entry hint
+      showToast('Camera active — enter barcode manually below if needed', '');
+    }
+  } catch(err) {
+    showToast('Camera access denied. Please allow camera permission or enter barcode manually.', '');
+    console.error(err);
+  }
 }
+
+function stopBarcodeScanner() {
+  if (scannerStream) {
+    scannerStream.getTracks().forEach(t => t.stop());
+    scannerStream = null;
+  }
+  if (scannerInterval) { clearInterval(scannerInterval); scannerInterval = null; }
+  const video = document.getElementById('scanner-video');
+  const idle = document.getElementById('scanner-idle');
+  const overlay = document.getElementById('scanner-overlay');
+  const btn = document.getElementById('scan-btn');
+  const stopBtn = document.getElementById('stop-btn');
+  video.style.display = 'none';
+  idle.style.display = 'flex';
+  overlay.style.display = 'none';
+  btn.textContent = 'Scan Barcode';
+  btn.disabled = false;
+  stopBtn.style.display = 'none';
+}
+
+async function lookupBarcode(code) {
+  if (!code || code.trim() === '') { showToast('Please enter a barcode', ''); return; }
+  code = code.trim();
+  document.getElementById('ai-result').classList.add('visible');
+  document.getElementById('ai-name-result').textContent = 'Looking up barcode...';
+  document.getElementById('ai-conf-result').textContent = code;
+  showToast('Looking up: ' + code, 'purple');
+
+  try {
+    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`);
+    const data = await res.json();
+    if (data.status === 1 && data.product) {
+      const p = data.product;
+      const name = p.product_name || p.product_name_en || '';
+      const brand = p.brands || '';
+      const fullName = brand && name ? `${brand} ${name}` : (name || brand || 'Unknown Product');
+      const cat = detectCategory(p.categories_tags || []);
+      document.getElementById('ai-name-result').textContent = fullName;
+      document.getElementById('ai-conf-result').textContent = `Barcode: ${code}`;
+      document.getElementById('scan-name').value = fullName;
+      document.getElementById('scan-cat').value = cat;
+      document.getElementById('manual-barcode').value = '';
+      showToast('Product found: ' + fullName, 'purple');
+    } else {
+      document.getElementById('ai-name-result').textContent = 'Product not found';
+      document.getElementById('ai-conf-result').textContent = `Barcode: ${code} — enter name manually`;
+      showToast('Barcode not found — enter item name manually', '');
+    }
+  } catch(e) {
+    document.getElementById('ai-name-result').textContent = 'Lookup failed';
+    document.getElementById('ai-conf-result').textContent = 'Check your connection and try again';
+    showToast('Could not look up barcode', '');
+  }
+}
+
+function detectCategory(tags) {
+  const t = tags.join(' ').toLowerCase();
+  if (t.includes('dairy') || t.includes('milk') || t.includes('cheese') || t.includes('yogurt')) return 'Dairy';
+  if (t.includes('meat') || t.includes('chicken') || t.includes('beef') || t.includes('fish')) return 'Meat';
+  if (t.includes('frozen')) return 'Frozen';
+  if (t.includes('beverage') || t.includes('drink') || t.includes('juice') || t.includes('water')) return 'Beverages';
+  if (t.includes('fruit') || t.includes('vegetable') || t.includes('produce')) return 'Produce';
+  if (t.includes('hygiene') || t.includes('cosmetic') || t.includes('shampoo') || t.includes('soap')) return 'Personal Care';
+  return 'Pantry';
+}
+
 function simulateScan() {
-  document.getElementById('scan-preview').style.display = 'none';
-  showAIResult(AI_DEMO_ITEMS[Math.floor(Math.random()*AI_DEMO_ITEMS.length)]);
-}
-function showAIResult(demo) {
+  const demo = AI_DEMO_ITEMS[Math.floor(Math.random()*AI_DEMO_ITEMS.length)];
   document.getElementById('ai-result').classList.add('visible');
   document.getElementById('ai-name-result').textContent = demo.name;
-  document.getElementById('ai-conf-result').textContent = `confidence: ${demo.conf}%`;
+  document.getElementById('ai-conf-result').textContent = 'Demo item';
   document.getElementById('scan-name').value = demo.name;
-  document.getElementById('scan-cat').value  = demo.cat || 'Pantry';
-  showToast(`AI identified: ${demo.name}`, 'purple');
+  document.getElementById('scan-cat').value = demo.cat || 'Pantry';
+  showToast('Demo: ' + demo.name, 'purple');
 }
 async function saveScannedItem() {
   const name = document.getElementById('scan-name').value.trim();
@@ -1209,8 +1324,7 @@ function clearScanForm() {
   document.getElementById('scan-unit').value    = 'ea';
   document.getElementById('scan-storage').value = 'Shelf';
   document.getElementById('ai-result').classList.remove('visible');
-  document.getElementById('scan-preview').style.display = 'none';
-  document.getElementById('cam-input').value = '';
+  document.getElementById('manual-barcode').value = '';
 }
 
 // ── LOG ───────────────────────────────────────────────────────────────────────
