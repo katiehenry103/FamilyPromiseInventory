@@ -816,26 +816,35 @@ let currentLocId = null;
 let adjustTarget = null;
 
 // ── SUPABASE HELPERS ──────────────────────────────────────────────────────────
-async function loadData() {
-  showLoadingOverlay(true);
+async function loadData(silent = false) {
+  if (!silent) showLoadingOverlay(true);
   try {
-    const [{ data: locs }, { data: items }, { data: log }] = await Promise.all([
+    const [locRes, itemRes, logRes] = await Promise.all([
       db.from('locations').select('*').order('created_at'),
       db.from('inventory').select('*').order('created_at'),
       db.from('activity_log').select('*').order('created_at', { ascending: false }).limit(100),
     ]);
-    locations = (locs || []).map(l => ({ id: l.id, name: l.name, color: l.color }));
+
+    if (locRes.error) throw locRes.error;
+    if (itemRes.error) throw itemRes.error;
+
+    const locs  = locRes.data  || [];
+    const items = itemRes.data || [];
+    const log   = logRes.data  || [];
+
+    locations = locs.map(l => ({ id: l.id, name: l.name, color: l.color }));
     inventories = {};
     locations.forEach(l => { inventories[l.id] = []; });
-    (items || []).forEach(i => {
+    items.forEach(i => {
       if (!inventories[i.loc_id]) inventories[i.loc_id] = [];
       inventories[i.loc_id].push({
         id: i.id, name: i.name, cat: i.cat,
         qty: parseFloat(i.qty), unit: i.unit,
-        best_by: i.best_by, storage: i.storage
+        best_by: i.best_by ? i.best_by.substring(0, 10) : '',
+        storage: i.storage
       });
     });
-    activityLog = (log || []).map(e => ({
+    activityLog = log.map(e => ({
       time: new Date(e.created_at), user: e.username,
       locId: e.loc_id, item: e.item_name,
       qty: parseFloat(e.qty), dir: e.direction, note: e.note || ''
@@ -843,9 +852,9 @@ async function loadData() {
     if (!currentLocId && locations.length > 0) currentLocId = locations[0].id;
   } catch(e) {
     console.error('Load error', e);
-    showToast('Could not connect to database', '');
+    if (!silent) showToast('Could not connect to database', '');
   }
-  showLoadingOverlay(false);
+  if (!silent) showLoadingOverlay(false);
 }
 
 async function saveLocation(loc) {
@@ -1169,7 +1178,7 @@ async function confirmAdjust() {
   await updateItemQty(item.id, item.qty);
   await logActivity(logEntry);
   // Reload fresh from Supabase
-  await loadData();
+  await loadData(true);
   closeModal();
   renderInventory();
   renderDashboard();
@@ -1330,48 +1339,39 @@ async function saveScannedItem() {
   if (!name) { showToast('Please enter an item name',''); return; }
   if (!qty || qty <= 0) { showToast('Please enter a valid quantity',''); return; }
   if (!date) { showToast('Please enter a best-by date',''); return; }
+  if (!currentLocId) { showToast('Please select a location first',''); return; }
 
   // Show saving state
   const saveBtn = document.querySelector('[onclick="saveScannedItem()"]');
   if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
 
   try {
-    const item = {
-      id: genId(), name,
+    const locId = currentLocId; // capture now in case it changes
+    const { data, error } = await db.from('inventory').insert({
+      loc_id: locId,
+      name:    name,
       cat:     document.getElementById('scan-cat').value,
-      qty, unit: document.getElementById('scan-unit').value,
+      qty:     qty,
+      unit:    document.getElementById('scan-unit').value,
       best_by: date,
       storage: document.getElementById('scan-storage').value,
-    };
-    if (!inventories[currentLocId]) inventories[currentLocId] = [];
-
-    // Save to Supabase first, get real ID back
-    const { data, error } = await db.from('inventory').insert({
-      loc_id: currentLocId, name: item.name,
-      cat: item.cat, qty: item.qty, unit: item.unit,
-      best_by: item.best_by, storage: item.storage
     }).select('id').single();
 
     if (error) {
       console.error('Save error:', error);
-      showToast('Error saving — check your connection', '');
+      showToast('Error saving — ' + (error.message || 'check connection'), '');
       return;
     }
 
-    // Use real DB id
-    if (data) item.id = data.id;
-    inventories[currentLocId].push(item);
-
-    const logEntry = { time: new Date(), user: currentUser, locId: currentLocId, item: name, qty, dir: 'in', note: 'Added via scan' };
-    activityLog.unshift(logEntry);
+    const logEntry = { time: new Date(), user: currentUser, locId, item: name, qty, dir: 'in', note: 'Added via scan' };
     await logActivity(logEntry);
 
-    // Reload fresh from Supabase so inventory list is accurate
-    await loadData();
+    // Reload fresh from Supabase
+    await loadData(true);
     updateLocationUI();
     renderDashboard();
     renderInventory();
-    showToast(`${name} added to ${currentLoc().name}`, 'purple');
+    showSuccessBanner(name);
     clearScanForm();
   } finally {
     if (saveBtn) { saveBtn.textContent = 'Save to Inventory'; saveBtn.disabled = false; }
@@ -1383,7 +1383,32 @@ function clearScanForm() {
   document.getElementById('scan-unit').value    = 'ea';
   document.getElementById('scan-storage').value = 'Shelf';
   document.getElementById('ai-result').classList.remove('visible');
-  document.getElementById('manual-barcode').value = '';
+  const mb = document.getElementById('manual-barcode-main');
+  if (mb) mb.value = '';
+  const ss = document.getElementById('scan-status');
+  if (ss) ss.textContent = '';
+}
+
+// ── SUCCESS BANNER ───────────────────────────────────────────────────────────
+function showSuccessBanner(name) {
+  let banner = document.getElementById('success-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'success-banner';
+    banner.style.cssText = `
+      position:fixed; top:80px; left:50%; transform:translateX(-50%);
+      background:#15803d; color:white; padding:16px 28px;
+      border-radius:10px; font-size:15px; font-weight:700;
+      z-index:500; box-shadow:0 8px 30px rgba(0,0,0,0.2);
+      text-align:center; min-width:280px;
+      opacity:0; transition:opacity 0.3s;
+      pointer-events:none;
+    `;
+    document.body.appendChild(banner);
+  }
+  banner.textContent = '✓ ' + name + ' added to inventory';
+  banner.style.opacity = '1';
+  setTimeout(() => { banner.style.opacity = '0'; }, 3000);
 }
 
 // ── LOG ───────────────────────────────────────────────────────────────────────
@@ -1480,3 +1505,4 @@ function renderAll() {
 </script>
 </body>
 </html>
+  
