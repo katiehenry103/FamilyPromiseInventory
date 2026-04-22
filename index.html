@@ -854,12 +854,16 @@ async function saveLocation(loc) {
 }
 
 async function saveItem(item) {
-  const { error } = await db.from('inventory').upsert({
-    id: item.id, loc_id: currentLocId, name: item.name,
+  // Don't send id - let Supabase auto-generate it
+  const { data, error } = await db.from('inventory').insert({
+    loc_id: currentLocId, name: item.name,
     cat: item.cat, qty: item.qty, unit: item.unit,
     best_by: item.best_by, storage: item.storage
-  });
-  if (error) { showToast('Error saving item', ''); console.error(error); }
+  }).select('id').single();
+  if (error) { showToast('Error saving item', ''); console.error(error); return null; }
+  // Update the local item with the real DB id so adjustments work
+  if (data) item.id = data.id;
+  return data;
 }
 
 async function updateItemQty(itemId, newQty) {
@@ -1249,36 +1253,61 @@ async function lookupBarcode(code) {
   if (!code || code.trim() === '') { showToast('Please enter a barcode', ''); return; }
   code = code.trim();
   document.getElementById('ai-result').classList.add('visible');
-  document.getElementById('ai-name-result').textContent = 'Looking up barcode...';
-  document.getElementById('ai-conf-result').textContent = code;
-  showToast('Looking up: ' + code, 'purple');
+  document.getElementById('ai-name-result').textContent = 'Looking up product...';
+  document.getElementById('ai-conf-result').textContent = `Barcode: ${code}`;
 
+  // Try Open Food Facts first, then UPC Item DB as fallback
+  let found = false;
+
+  // Source 1: Open Food Facts
   try {
-    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`);
+    const res  = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`);
     const data = await res.json();
     if (data.status === 1 && data.product) {
-      const p = data.product;
+      const p    = data.product;
       const name = p.product_name || p.product_name_en || '';
       const brand = p.brands || '';
-      const fullName = brand && name ? `${brand} ${name}` : (name || brand || 'Unknown Product');
-      const cat = detectCategory(p.categories_tags || []);
-      document.getElementById('ai-name-result').textContent = fullName;
-      document.getElementById('ai-conf-result').textContent = `Barcode: ${code}`;
-      document.getElementById('scan-name').value = fullName;
-      document.getElementById('scan-cat').value = cat;
-      document.getElementById('manual-barcode').value = '';
-      document.getElementById('manual-barcode-main').value = '';
-      showToast('Product found: ' + fullName, 'purple');
-    } else {
-      document.getElementById('ai-name-result').textContent = 'Product not found';
-      document.getElementById('ai-conf-result').textContent = `Barcode: ${code} — enter name manually`;
-      showToast('Barcode not found — enter item name manually', '');
+      const fullName = brand && name ? `${brand} ${name}` : (name || brand || '');
+      if (fullName) {
+        const cat = detectCategory(p.categories_tags || []);
+        setProductResult(fullName, cat, code);
+        found = true;
+      }
     }
-  } catch(e) {
-    document.getElementById('ai-name-result').textContent = 'Lookup failed';
-    document.getElementById('ai-conf-result').textContent = 'Check your connection and try again';
-    showToast('Could not look up barcode', '');
+  } catch(e) { /* try next */ }
+
+  // Source 2: UPC Item DB (great for US grocery products)
+  if (!found) {
+    try {
+      const res  = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`);
+      const data = await res.json();
+      if (data.code === 'OK' && data.items && data.items.length > 0) {
+        const item = data.items[0];
+        const fullName = item.title || item.brand || '';
+        if (fullName) {
+          const cat = detectCategory([item.category || '']);
+          setProductResult(fullName, cat, code);
+          found = true;
+        }
+      }
+    } catch(e) { /* try next */ }
   }
+
+  if (!found) {
+    document.getElementById('ai-name-result').textContent = 'Product not in database';
+    document.getElementById('ai-conf-result').textContent = `Barcode: ${code} — type the name below`;
+    document.getElementById('scan-name').focus();
+    showToast('Not found — type item name manually', '');
+  }
+}
+
+function setProductResult(fullName, cat, code) {
+  document.getElementById('ai-name-result').textContent = fullName;
+  document.getElementById('ai-conf-result').textContent = `Barcode: ${code}`;
+  document.getElementById('scan-name').value  = fullName;
+  document.getElementById('scan-cat').value   = cat;
+  document.getElementById('manual-barcode-main').value = '';
+  showToast('Found: ' + fullName, 'purple');
 }
 
 function detectCategory(tags) {
