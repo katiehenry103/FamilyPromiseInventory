@@ -1328,23 +1328,48 @@ async function saveScannedItem() {
   if (!name) { showToast('Please enter an item name',''); return; }
   if (!qty || qty <= 0) { showToast('Please enter a valid quantity',''); return; }
   if (!date) { showToast('Please enter a best-by date',''); return; }
-  const item = {
-    id: genId(), name,
-    cat:     document.getElementById('scan-cat').value,
-    qty, unit: document.getElementById('scan-unit').value,
-    best_by: date,
-    storage: document.getElementById('scan-storage').value,
-  };
-  if (!inventories[currentLocId]) inventories[currentLocId] = [];
-  inventories[currentLocId].push(item);
-  const logEntry = { time: new Date(), user: currentUser, locId: currentLocId, item: name, qty, dir: 'in', note: 'Added via scan' };
-  activityLog.unshift(logEntry);
-  await saveItem(item);
-  await logActivity(logEntry);
-  updateLocationUI();
-  renderDashboard();
-  showToast(`${name} added to ${currentLoc().name}`, 'purple');
-  clearScanForm();
+
+  // Show saving state
+  const saveBtn = document.querySelector('[onclick="saveScannedItem()"]');
+  if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
+
+  try {
+    const item = {
+      id: genId(), name,
+      cat:     document.getElementById('scan-cat').value,
+      qty, unit: document.getElementById('scan-unit').value,
+      best_by: date,
+      storage: document.getElementById('scan-storage').value,
+    };
+    if (!inventories[currentLocId]) inventories[currentLocId] = [];
+
+    // Save to Supabase first, get real ID back
+    const { data, error } = await db.from('inventory').insert({
+      loc_id: currentLocId, name: item.name,
+      cat: item.cat, qty: item.qty, unit: item.unit,
+      best_by: item.best_by, storage: item.storage
+    }).select('id').single();
+
+    if (error) {
+      console.error('Save error:', error);
+      showToast('Error saving — check your connection', '');
+      return;
+    }
+
+    // Use real DB id
+    if (data) item.id = data.id;
+    inventories[currentLocId].push(item);
+
+    const logEntry = { time: new Date(), user: currentUser, locId: currentLocId, item: name, qty, dir: 'in', note: 'Added via scan' };
+    activityLog.unshift(logEntry);
+    await logActivity(logEntry);
+    updateLocationUI();
+    renderDashboard();
+    showToast(`${name} added to ${currentLoc().name}`, 'purple');
+    clearScanForm();
+  } finally {
+    if (saveBtn) { saveBtn.textContent = 'Save to Inventory'; saveBtn.disabled = false; }
+  }
 }
 function clearScanForm() {
   ['scan-name','scan-qty','scan-date'].forEach(id => document.getElementById(id).value='');
