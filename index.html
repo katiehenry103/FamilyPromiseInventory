@@ -1168,6 +1168,8 @@ async function confirmAdjust() {
   activityLog.unshift(logEntry);
   await updateItemQty(item.id, item.qty);
   await logActivity(logEntry);
+  // Reload fresh from Supabase
+  await loadData();
   closeModal();
   renderInventory();
   renderDashboard();
@@ -1363,8 +1365,12 @@ async function saveScannedItem() {
     const logEntry = { time: new Date(), user: currentUser, locId: currentLocId, item: name, qty, dir: 'in', note: 'Added via scan' };
     activityLog.unshift(logEntry);
     await logActivity(logEntry);
+
+    // Reload fresh from Supabase so inventory list is accurate
+    await loadData();
     updateLocationUI();
     renderDashboard();
+    renderInventory();
     showToast(`${name} added to ${currentLoc().name}`, 'purple');
     clearScanForm();
   } finally {
