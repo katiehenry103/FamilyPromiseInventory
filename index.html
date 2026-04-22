@@ -621,44 +621,64 @@
       </div>
     </div>
 
+    <!-- FULLSCREEN SCANNER MODAL -->
+    <div id="scanner-modal" style="display:none;position:fixed;inset:0;background:#000;z-index:600;flex-direction:column;">
+      <div style="position:relative;flex:1;overflow:hidden;">
+        <video id="scanner-video" style="width:100%;height:100%;object-fit:cover;" playsinline autoplay muted></video>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
+          <div style="width:260px;height:160px;border:3px solid #f5c518;border-radius:10px;position:relative;box-shadow:0 0 0 9999px rgba(0,0,0,0.5);">
+            <div style="position:absolute;top:-2px;left:-2px;width:24px;height:24px;border-top:4px solid white;border-left:4px solid white;border-radius:4px 0 0 0;"></div>
+            <div style="position:absolute;top:-2px;right:-2px;width:24px;height:24px;border-top:4px solid white;border-right:4px solid white;border-radius:0 4px 0 0;"></div>
+            <div style="position:absolute;bottom:-2px;left:-2px;width:24px;height:24px;border-bottom:4px solid white;border-left:4px solid white;border-radius:0 0 0 4px;"></div>
+            <div style="position:absolute;bottom:-2px;right:-2px;width:24px;height:24px;border-bottom:4px solid white;border-right:4px solid white;border-radius:0 0 4px 0;"></div>
+          </div>
+          <div style="margin-top:20px;color:white;font-size:14px;font-weight:500;background:rgba(0,0,0,0.6);padding:8px 16px;border-radius:20px;">Point camera at barcode</div>
+        </div>
+      </div>
+      <div style="background:#111;padding:16px 20px;display:flex;align-items:center;gap:12px;">
+        <div style="flex:1;">
+          <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:4px;">Or type barcode number:</div>
+          <div style="display:flex;gap:8px;">
+            <input type="number" id="manual-barcode" placeholder="Enter barcode number" style="flex:1;padding:10px 12px;background:#222;border:1px solid #444;border-radius:6px;color:white;font-size:14px;font-family:var(--mono);outline:none;">
+            <button onclick="lookupBarcode(document.getElementById('manual-barcode').value)" style="padding:10px 16px;background:var(--accent);color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);">Look up</button>
+          </div>
+        </div>
+        <button onclick="stopBarcodeScanner()" style="padding:10px 20px;background:#333;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);flex-shrink:0;">Cancel</button>
+      </div>
+    </div>
+
     <!-- SCAN -->
     <div id="tab-scan" style="display:none">
       <div class="section-header">
-        <div><h2>Add Item</h2><p>Scan a barcode or enter details manually for <span id="scan-loc-label" style="color:var(--accent);font-weight:600">current location</span></p></div>
+        <div><h2>Add Item</h2><p>Adding to <span id="scan-loc-label" style="color:var(--accent);font-weight:600">current location</span></p></div>
       </div>
       <div class="scan-grid">
         <div>
-          <!-- BARCODE SCANNER VIEW -->
-          <div id="scanner-container" style="position:relative;background:#111;border-radius:var(--radius);overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;">
-            <video id="scanner-video" style="width:100%;height:100%;object-fit:cover;display:none;" playsinline></video>
-            <div id="scanner-idle" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px;text-align:center;">
-              <div style="width:60px;height:60px;border:2px solid rgba(255,255,255,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5">
-                  <path d="M3 9V6a2 2 0 012-2h2M3 15v3a2 2 0 002 2h2M15 3h3a2 2 0 012 2v2M15 19h3a2 2 0 002-2v-2"/>
-                  <line x1="8" y1="12" x2="8" y2="12.01"/><line x1="12" y1="12" x2="16" y2="12"/>
-                </svg>
-              </div>
-              <div style="color:rgba(255,255,255,0.6);font-size:13px;font-weight:500;">Tap "Scan Barcode" to use camera</div>
-              <div style="color:rgba(255,255,255,0.3);font-size:11px;">Works best on mobile</div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px 20px;text-align:center;box-shadow:var(--shadow);">
+            <div style="width:64px;height:64px;background:var(--accent-light);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8">
+                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                <line x1="14" y1="14" x2="14" y2="14.01"/><line x1="17" y1="14" x2="21" y2="14"/>
+                <line x1="14" y1="17" x2="14" y2="21"/><line x1="17" y1="17" x2="21" y2="21"/>
+                <line x1="21" y1="17" x2="21" y2="17.01"/>
+              </svg>
             </div>
-            <div id="scanner-overlay" style="display:none;position:absolute;inset:0;pointer-events:none;">
-              <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:80px;border:2px solid #f5c518;border-radius:6px;"></div>
-              <div style="position:absolute;bottom:16px;left:0;right:0;text-align:center;color:white;font-size:12px;font-weight:500;background:rgba(0,0,0,0.5);padding:6px;">Align barcode within the box</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px;">Scan a Barcode</div>
+            <div style="font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.5;">Point your camera at any product barcode to automatically fill in the item details.</div>
+            <button class="btn-sm btn-purple" style="width:100%;padding:13px;font-size:14px;" onclick="startBarcodeScanner()">Open Camera Scanner</button>
+          </div>
+          <div style="margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;box-shadow:var(--shadow);">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px;">Have a barcode number? Enter it here:</div>
+            <div style="display:flex;gap:8px;">
+              <input type="number" id="manual-barcode-main" placeholder="e.g. 0123456789012" style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:var(--mono);outline:none;">
+              <button class="btn-sm btn-outline" onclick="lookupBarcode(document.getElementById('manual-barcode-main').value)">Look up</button>
             </div>
-          </div>
-          <div style="margin-top:10px;display:flex;gap:8px">
-            <button class="btn-sm btn-purple" style="flex:1" id="scan-btn" onclick="startBarcodeScanner()">Scan Barcode</button>
-            <button class="btn-sm btn-outline" style="flex:1" id="stop-btn" onclick="stopBarcodeScanner()" style="display:none">Stop</button>
-          </div>
-          <div style="margin-top:8px;text-align:center;">
-            <span style="font-size:11px;color:var(--text2)">or enter barcode manually: </span>
-            <input type="text" id="manual-barcode" placeholder="e.g. 0123456789" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:5px;width:140px;font-family:var(--mono)">
-            <button onclick="lookupBarcode(document.getElementById('manual-barcode').value)" style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;margin-left:4px;">Look up</button>
           </div>
         </div>
         <div class="form-panel">
           <div class="ai-result" id="ai-result">
-            <div class="ai-result-label">Barcode Result</div>
+            <div class="ai-result-label">Product Found</div>
             <div class="ai-result-name" id="ai-name-result">—</div>
             <div class="ai-result-conf" id="ai-conf-result">—</div>
           </div>
@@ -780,6 +800,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
 <script>
 // ── SUPABASE CONFIG ───────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://ksdrpuunuoqgdunkqnfn.supabase.co';
@@ -792,18 +813,7 @@ const USERS = { admin: 'promise123', volunteer1: 'promise123', manager: 'promise
 const LOC_COLORS = ['#5c2d91','#e53935','#1976d2','#388e3c','#f57c00','#00838f','#6d4c41','#ad1457'];
 let selectedColor = LOC_COLORS[0];
 
-const AI_DEMO_ITEMS = [
-  { name: 'Canned Tomatoes', cat: 'Pantry', conf: 94 },
-  { name: 'Peanut Butter', cat: 'Pantry', conf: 89 },
-  { name: 'Whole Milk (1 gal)', cat: 'Dairy', conf: 97 },
-  { name: 'Chicken Breast', cat: 'Meat', conf: 91 },
-  { name: 'Frozen Peas', cat: 'Frozen', conf: 88 },
-  { name: 'Shampoo', cat: 'Personal Care', conf: 82 },
-  { name: 'Orange Juice', cat: 'Beverages', conf: 93 },
-  { name: 'White Rice (5 lb)', cat: 'Pantry', conf: 96 },
-  { name: 'Bananas', cat: 'Produce', conf: 99 },
-  { name: 'Pasta Sauce', cat: 'Pantry', conf: 87 },
-];
+
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let locations    = [];
@@ -1173,69 +1183,45 @@ document.getElementById('add-loc-modal').addEventListener('click', e => { if(e.t
 document.addEventListener('keydown', e => { if(e.key==='Escape') { closeModal(); closeAddLocation(); } });
 
 // ── BARCODE SCANNER ───────────────────────────────────────────────────────────
-let scannerStream = null;
-let scannerInterval = null;
+let zxingReader = null;
 
 async function startBarcodeScanner() {
-  const btn = document.getElementById('scan-btn');
-  const stopBtn = document.getElementById('stop-btn');
-  const video = document.getElementById('scanner-video');
-  const idle = document.getElementById('scanner-idle');
-  const overlay = document.getElementById('scanner-overlay');
+  const modal = document.getElementById('scanner-modal');
+  modal.style.display = 'flex';
+  modal.style.flexDirection = 'column';
+  document.body.style.overflow = 'hidden';
 
   try {
-    scannerStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    video.srcObject = scannerStream;
-    await video.play();
-    video.style.display = 'block';
-    idle.style.display = 'none';
-    overlay.style.display = 'block';
-    btn.textContent = 'Scanning...';
-    btn.disabled = true;
-    stopBtn.style.display = 'block';
+    const { BrowserMultiFormatReader } = ZXing;
+    zxingReader = new BrowserMultiFormatReader();
+    const video = document.getElementById('scanner-video');
 
-    // Use BarcodeDetector if available (Chrome/Android), fallback to ZXing
-    if ('BarcodeDetector' in window) {
-      const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code'] });
-      scannerInterval = setInterval(async () => {
-        try {
-          const barcodes = await detector.detect(video);
-          if (barcodes.length > 0) {
-            const code = barcodes[0].rawValue;
-            stopBarcodeScanner();
-            await lookupBarcode(code);
-          }
-        } catch(e) {}
-      }, 500);
-    } else {
-      // Fallback: show manual entry hint
-      showToast('Camera active — enter barcode manually below if needed', '');
-    }
+    // Get available cameras and prefer back camera
+    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    const backCamera = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
+    const deviceId = backCamera ? backCamera.deviceId : undefined;
+
+    zxingReader.decodeFromVideoDevice(deviceId, video, async (result, err) => {
+      if (result) {
+        const code = result.getText();
+        stopBarcodeScanner();
+        await lookupBarcode(code);
+      }
+    });
   } catch(err) {
-    showToast('Camera access denied. Please allow camera permission or enter barcode manually.', '');
+    stopBarcodeScanner();
+    showToast('Camera not available — enter barcode number manually', '');
     console.error(err);
   }
 }
 
 function stopBarcodeScanner() {
-  if (scannerStream) {
-    scannerStream.getTracks().forEach(t => t.stop());
-    scannerStream = null;
+  if (zxingReader) {
+    try { zxingReader.reset(); } catch(e) {}
+    zxingReader = null;
   }
-  if (scannerInterval) { clearInterval(scannerInterval); scannerInterval = null; }
-  const video = document.getElementById('scanner-video');
-  const idle = document.getElementById('scanner-idle');
-  const overlay = document.getElementById('scanner-overlay');
-  const btn = document.getElementById('scan-btn');
-  const stopBtn = document.getElementById('stop-btn');
-  video.style.display = 'none';
-  idle.style.display = 'flex';
-  overlay.style.display = 'none';
-  btn.textContent = 'Scan Barcode';
-  btn.disabled = false;
-  stopBtn.style.display = 'none';
+  document.getElementById('scanner-modal').style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 async function lookupBarcode(code) {
@@ -1260,6 +1246,7 @@ async function lookupBarcode(code) {
       document.getElementById('scan-name').value = fullName;
       document.getElementById('scan-cat').value = cat;
       document.getElementById('manual-barcode').value = '';
+      document.getElementById('manual-barcode-main').value = '';
       showToast('Product found: ' + fullName, 'purple');
     } else {
       document.getElementById('ai-name-result').textContent = 'Product not found';
@@ -1284,15 +1271,6 @@ function detectCategory(tags) {
   return 'Pantry';
 }
 
-function simulateScan() {
-  const demo = AI_DEMO_ITEMS[Math.floor(Math.random()*AI_DEMO_ITEMS.length)];
-  document.getElementById('ai-result').classList.add('visible');
-  document.getElementById('ai-name-result').textContent = demo.name;
-  document.getElementById('ai-conf-result').textContent = 'Demo item';
-  document.getElementById('scan-name').value = demo.name;
-  document.getElementById('scan-cat').value = demo.cat || 'Pantry';
-  showToast('Demo: ' + demo.name, 'purple');
-}
 async function saveScannedItem() {
   const name = document.getElementById('scan-name').value.trim();
   const qty  = parseFloat(document.getElementById('scan-qty').value);
