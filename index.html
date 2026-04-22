@@ -956,6 +956,18 @@
   </div>
 </div>
 
+<!-- DELETE LOCATION CONFIRM MODAL -->
+<div class="modal-overlay" id="delete-loc-modal">
+  <div class="modal">
+    <h3>Delete Location</h3>
+    <p id="delete-loc-msg" style="font-size:14px;color:var(--text2);margin-bottom:20px;line-height:1.5;"></p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="document.getElementById('delete-loc-modal').classList.remove('open')">Cancel</button>
+      <button class="btn-sm" id="delete-loc-confirm-btn" style="background:var(--danger);color:white;border-color:var(--danger);padding:10px 20px;">Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -1033,8 +1045,14 @@ async function loadData(silent = false) {
 }
 
 async function saveLocation(loc) {
-  const { error } = await db.from('locations').upsert({ id: loc.id, name: loc.name, color: loc.color });
-  if (error) { showToast('Error saving location', ''); console.error(error); }
+  const { data, error } = await db.from('locations').insert({ 
+    name: loc.name, color: loc.color 
+  }).select('id, name, color').single();
+  if (error) {
+    console.error('saveLocation error:', error);
+    return null;
+  }
+  return data;
 }
 
 async function saveItem(item) {
@@ -1175,36 +1193,44 @@ document.addEventListener('click', e => {
 });
 
 // DELETE LOCATION
-async function deleteLocation(id, name) {
-  if (!confirm(`Delete "${name}"?`)) return;
+function deleteLocation(id, name) {
   closeLocDropdown();
+  document.getElementById('delete-loc-msg').textContent = `Are you sure you want to delete "${name}" and all its items? This cannot be undone.`;
+  const modal = document.getElementById('delete-loc-modal');
+  modal.classList.add('open');
+  const btn = document.getElementById('delete-loc-confirm-btn');
+  // Remove old listener and add new one
+  const newBtn = btn.cloneNode(true);
+  btn.parentNode.replaceChild(newBtn, btn);
+  newBtn.addEventListener('click', async () => {
+    modal.classList.remove('open');
 
-  // Remove from UI immediately
-  locations = locations.filter(l => l.id !== id);
-  delete inventories[id];
+    // Remove from local state immediately
+    locations = locations.filter(l => l.id !== id);
+    delete inventories[id];
+    if (currentLocId === id) {
+      currentLocId = locations.length > 0 ? locations[0].id : null;
+    }
 
-  if (currentLocId === id) {
-    currentLocId = locations.length > 0 ? locations[0].id : null;
-  }
+    // Update UI instantly
+    if (locations.length === 0) {
+      currentLocId = null;
+      showEmptyState();
+    } else {
+      updateLocationUI();
+      renderDashboard();
+      renderInventory();
+      renderLocDropdown();
+    }
 
-  // Update UI right away
-  if (locations.length === 0) {
-    currentLocId = null;
-    showEmptyState();
-  } else {
-    updateLocationUI();
-    renderDashboard();
-    renderInventory();
-    renderLocDropdown();
-  }
+    showToast(`${name} deleted`, '');
 
-  showToast(`${name} deleted`, '');
-
-  // Delete from DB in background
-  try {
-    await db.from('inventory').delete().eq('loc_id', id);
-    await db.from('locations').delete().eq('id', id);
-  } catch(e) { console.error(e); }
+    // Delete from DB in background
+    try {
+      await db.from('inventory').delete().eq('loc_id', id);
+      await db.from('locations').delete().eq('id', id);
+    } catch(e) { console.error(e); }
+  });
 }
 
 // ADD LOCATION
@@ -1235,25 +1261,39 @@ function hexToRgb(hex) {
 async function confirmAddLocation() {
   const name = document.getElementById('new-loc-name').value.trim();
   if (!name) { showToast('Please enter a location name', ''); return; }
-  const id = genLocId();
-  const loc = { id, name, color: selectedColor };
 
-  await saveLocation(loc);
+  const btn = document.getElementById('add-loc-confirm-btn');
 
-  // Reload from DB so IDs are exact
-  await loadData(true);
+  try {
+    // Save directly to Supabase with a text ID
+    const { data, error } = await db.from('locations').insert({
+      name: name, color: selectedColor
+    }).select('id, name, color').single();
 
-  // Set currentLocId to the newly created location
-  const newLoc = locations.find(l => l.name === name);
-  if (newLoc) currentLocId = newLoc.id;
+    if (error) {
+      console.error('Add location error:', error);
+      showToast('Error: ' + (error.message || 'could not add location'), '');
+      return;
+    }
 
-  closeAddLocation();
-  updateLocationUI();
-  renderAll();
-  showToast(`${name} added as a location`, 'purple');
-  const panel = document.getElementById('empty-state-panel');
-  if (panel) panel.style.display = 'none';
-  document.getElementById('tab-dashboard').style.display = '';
+    // Use the ID Supabase assigned
+    const newLoc = { id: data.id, name: data.name, color: data.color };
+    locations.push(newLoc);
+    inventories[data.id] = [];
+    currentLocId = data.id;
+
+    closeAddLocation();
+    updateLocationUI();
+    renderAll();
+    showToast(`${name} added`, 'purple');
+    const panel = document.getElementById('empty-state-panel');
+    if (panel) panel.style.display = 'none';
+    document.getElementById('tab-dashboard').style.display = '';
+
+  } catch(e) {
+    console.error(e);
+    showToast('Error adding location', '');
+  }
 }
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
