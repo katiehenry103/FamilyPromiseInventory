@@ -118,6 +118,23 @@
   .auth-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
   .auth-footer a:hover { text-decoration: underline; }
 
+  /* ── FAQ ── */
+  .faq-item { border-bottom: 1px solid var(--border); }
+  .faq-q {
+    padding: 16px 20px; font-size: 14px; font-weight: 600;
+    cursor: pointer; display: flex; justify-content: space-between;
+    align-items: center; gap: 12px; user-select: none;
+    transition: background 0.1s;
+  }
+  .faq-q:hover { background: var(--surface2); }
+  .faq-arrow { color: var(--text2); font-size: 16px; flex-shrink: 0; transition: transform 0.2s; }
+  .faq-q.open .faq-arrow { transform: rotate(180deg); }
+  .faq-a {
+    display: none; padding: 0 20px 16px;
+    font-size: 13px; color: var(--text2); line-height: 1.7;
+  }
+  .faq-a.open { display: block; }
+
   @media (max-width: 720px) {
     .auth-right { display: none; }
     .auth-left { width: 100%; padding: 40px 28px; }
@@ -450,6 +467,23 @@
     .form-row { grid-template-columns: 1fr; }
     nav { overflow-x: auto; }
     .header-center { display: none; }
+
+    /* Hide less important columns on mobile */
+    .inv-table .hide-mobile { display: none; }
+
+    /* Make tables scroll horizontally if needed */
+    .panel { overflow-x: auto; }
+
+    /* Compact table cells on mobile */
+    .inv-table th, .inv-table td { padding: 10px 10px; font-size: 12px; }
+    .item-name { font-size: 13px; }
+    .qty-btn { width: 24px; height: 24px; font-size: 14px; }
+    .qty-num { min-width: 24px; font-size: 13px; }
+
+    /* Section header wraps nicely */
+    .section-header { flex-direction: column; align-items: flex-start; }
+    .section-header > div:last-child { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+    .section-header .btn-sm { flex: 1; text-align: center; }
   }
 </style>
 </head>
@@ -524,7 +558,7 @@
     <div class="location-banner-dot" id="banner-dot"></div>
     <span class="location-banner-text" id="banner-name"></span>
     <span class="location-banner-sub" id="banner-count"></span>
-    <button class="location-banner-change" onclick="toggleLocDropdown()">Switch Location</button>
+    <button class="location-banner-change" onclick="openLocDropdown(event)">Switch Location</button>
   </div>
 
   <nav>
@@ -532,6 +566,7 @@
     <button class="nav-tab" onclick="showTab('inventory', this)">Inventory</button>
     <button class="nav-tab" onclick="showTab('scan', this)">Add Item</button>
     <button class="nav-tab" onclick="showTab('log', this)">Activity Log</button>
+    <button class="nav-tab" onclick="showTab('help', this)">Help</button>
   </nav>
 
   <main>
@@ -544,7 +579,7 @@
           <p id="dash-subtitle">Overview for current location</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn-sm btn-outline" onclick="toggleLocDropdown()">Switch Location</button>
+          <button class="btn-sm btn-outline" onclick="openLocDropdown(event)">Switch Location</button>
           <button class="btn-sm btn-purple" onclick="goToScan()">+ Add Item</button>
         </div>
       </div>
@@ -574,7 +609,7 @@
           <span style="font-size:12px;color:var(--text2)">Expired or expiring within 7 days</span>
         </div>
         <table class="inv-table">
-          <thead><tr><th>Item</th><th>Location</th><th>Category</th><th>Qty</th><th>Best By</th><th>Status</th></tr></thead>
+          <thead><tr><th>Item</th><th class="hide-mobile">Location</th><th class="hide-mobile">Category</th><th>Qty</th><th>Best By</th><th>Status</th></tr></thead>
           <tbody id="attention-body"></tbody>
         </table>
       </div>
@@ -615,7 +650,7 @@
       </div>
       <div class="panel">
         <table class="inv-table">
-          <thead><tr><th>Item</th><th>Category</th><th>Storage</th><th>Quantity</th><th>Best By</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Item</th><th class="hide-mobile">Category</th><th class="hide-mobile">Storage</th><th>Qty</th><th>Best By</th><th>Status</th><th></th></tr></thead>
           <tbody id="inv-body"></tbody>
         </table>
       </div>
@@ -720,6 +755,139 @@
             <button class="btn-sm btn-outline" onclick="clearScanForm()">Clear</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- HELP -->
+    <div id="tab-help" style="display:none">
+      <div class="section-header">
+        <div><h2>Help & Support</h2><p>Everything you need to know about using Family Promise Inventory</p></div>
+      </div>
+
+      <!-- Contact Card -->
+      <div style="background:var(--accent);border-radius:var(--radius);padding:24px 28px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+        <div>
+          <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.6);margin-bottom:4px;">Need help? Contact us</div>
+          <div style="font-size:18px;font-weight:700;color:white;">Katherine Henry &amp; Anna Henry</div>
+          <a href="mailto:katiehenry103@gmail.com" style="color:rgba(255,255,255,0.8);font-size:14px;text-decoration:none;">katiehenry103@gmail.com</a>
+        </div>
+        <a href="mailto:katiehenry103@gmail.com" style="background:white;color:var(--accent);padding:10px 20px;border-radius:var(--radius);font-weight:700;font-size:13px;text-decoration:none;">Send Email</a>
+      </div>
+
+      <!-- FAQ -->
+      <div class="panel">
+        <div class="panel-header"><h3>Frequently Asked Questions</h3></div>
+
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">
+            How do I add a new location?
+            <span class="faq-arrow">▾</span>
+          </div>
+          <div class="faq-a">
+            Tap the location name in the top header bar, or tap <strong>Switch Location</strong> on the Dashboard. At the bottom of the dropdown, tap <strong>+ Add New Location</strong>. Enter a name and choose a color, then tap <strong>Add Location</strong>. You will be switched to that location automatically.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">
+            How do I scan an item's barcode?
+            <span class="faq-arrow">▾</span>
+          </div>
+          <div class="faq-a">
+            Go to the <strong>Add Item</strong> tab. Tap <strong>Start Scanner</strong> — your camera will open. Point it at the barcode on the product. The app will automatically read the barcode and look up the product name. If scanning doesn't work, you can type the barcode number in the manual entry box below the scanner, or just type the item name directly.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">
+            How do I add an item manually without scanning?
+            <span class="faq-arrow">▾</span>
+          </div>
+          <div class="faq-a">
+            Go to the <strong>Add Item</strong> tab. Skip the scanner and type the item name directly into the <strong>Item Name</strong> field on the right. Fill in the category, quantity, unit, best-by date, and storage area, then tap <strong>Save to Inventory</strong>.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">
+            How do I adjust the quantity of an item?
+            <span class="faq-arrow">▾</span>
+          </div>
+          <div class="faq-a">
+            Go to the <strong>Inventory</strong> tab. Find the item and tap the <strong>−</strong> or <strong>+</strong> buttons next to the quantity, or tap <strong>Adjust</strong>. Enter how much to add or remove, choose Incoming or Outgoing, add an optional note, and tap <strong>Save Change</strong>. If the quantity reaches zero, the item is automatically removed from inventory.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">
+            How do I switch between locations?
+            <span class="faq-arrow">▾</span>
+          </div>
+          <div class="faq-a">
+            Tap the location name in the purple header bar at the top, or tap <strong>Switch Location</strong> on the Dashboard. A dropdown will appear showing all your locations. Tap any location to switch to it. Each location has its own separate inventory.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">
+            How do I delete a location?
+            <span class="faq-arrow">▾</span>
+          </div>
+          <div class="faq-a">
+            Open the location switcher by tapping the location name in the header. Each location has a small <strong>✕</strong> button on the right side. Tap it and confirm to delete the location and all of its inventory items. This cannot be undone, so be careful.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">
+            What does the Dashboard show?
+            <span class="faq-arrow">▾</span>
+          </div>
+          <div class="faq-a">
+            The Dashboard shows a summary of the current location — total number of items, number of categories, how many items are expiring within 7 days, and how many are already expired. Items that need attention are listed at the bottom so you can act on them quickly.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">
+            What do Fresh, Expiring Soon, and Expired mean?
+            <span class="faq-arrow">▾</span>
+          </div>
+          <div class="faq-a">
+            These are freshness statuses based on the best-by date you entered. <strong>Fresh</strong> means more than 7 days until expiry. <strong>Expiring Soon</strong> means 7 days or less remaining. <strong>Expired</strong> means the best-by date has already passed. Items that are expiring soon or expired show up on the Dashboard under Needs Attention.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">
+            Will my data be saved if I close the app?
+            <span class="faq-arrow">▾</span>
+          </div>
+          <div class="faq-a">
+            Yes. All data is saved to a secure cloud database in real time. You can close the app, switch devices, or have multiple volunteers use it at the same time — everyone will always see the same up-to-date inventory.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-q" onclick="toggleFaq(this)">
+            How do I export the inventory?
+            <span class="faq-arrow">▾</span>
+          </div>
+          <div class="faq-a">
+            Go to the <strong>Inventory</strong> tab and tap <strong>Export CSV</strong>. This downloads a spreadsheet file of the current location's inventory that can be opened in Excel or Google Sheets.
+          </div>
+        </div>
+
+        <div class="faq-item" style="border-bottom:none">
+          <div class="faq-q" onclick="toggleFaq(this)">
+            How do I log in and what are the passwords?
+            <span class="faq-arrow">▾</span>
+          </div>
+          <div class="faq-a">
+            Contact Katherine or Anna at <a href="mailto:katiehenry103@gmail.com" style="color:var(--accent);">katiehenry103@gmail.com</a> to get your login credentials. Do not share your password with anyone outside your organization.
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -978,13 +1146,14 @@ function renderLocDropdown() {
   const list = document.getElementById('loc-dd-list');
   list.innerHTML = locations.map(loc => {
     const cnt = (inventories[loc.id]||[]).length;
-    return `<div class="loc-dd-item ${loc.id===currentLocId?'active':''}" onclick="switchLocation('${loc.id}')">
+    return `<div class="loc-dd-item ${loc.id===currentLocId?'active':''}" style="cursor:default">
       <div class="loc-dd-dot" style="background:${loc.color}"></div>
-      <div class="loc-dd-info">
+      <div class="loc-dd-info" onclick="switchLocation('${loc.id}')" style="cursor:pointer;flex:1">
         <div class="loc-dd-name">${loc.name}</div>
         <div class="loc-dd-count">${cnt} item${cnt!==1?'s':''}</div>
       </div>
       ${loc.id===currentLocId ? '<span class="loc-dd-check">✓</span>' : ''}
+      <button onclick="deleteLocation('${loc.id}','${loc.name}')" style="background:none;border:none;color:#c0392b;font-size:14px;cursor:pointer;padding:4px 8px;border-radius:4px;margin-left:4px;" title="Delete location">✕</button>
     </div>`;
   }).join('');
 }
@@ -992,15 +1161,39 @@ function renderLocDropdown() {
 function toggleLocDropdown() {
   document.getElementById('loc-dropdown').classList.toggle('open');
 }
+function openLocDropdown(e) {
+  if (e) e.stopPropagation();
+  document.getElementById('loc-dropdown').classList.add('open');
+}
 function closeLocDropdown() {
   document.getElementById('loc-dropdown').classList.remove('open');
 }
 document.addEventListener('click', e => {
   const dd = document.getElementById('loc-dropdown');
   const sw = document.querySelector('.location-switcher');
-  const bn = document.querySelector('.location-banner-change');
-  if (!dd.contains(e.target) && e.target !== sw && !sw.contains(e.target) && e.target !== bn) closeLocDropdown();
+  if (!dd.contains(e.target) && !sw.contains(e.target)) closeLocDropdown();
 });
+
+// DELETE LOCATION
+async function deleteLocation(id, name) {
+  if (!confirm(`Delete "${name}" and all its items? This cannot be undone.`)) return;
+  closeLocDropdown();
+  // Delete all inventory items for this location
+  await db.from('inventory').delete().eq('loc_id', id);
+  await db.from('locations').delete().eq('id', id);
+  // Reload and switch to another location if needed
+  await loadData(true);
+  if (currentLocId === id) {
+    currentLocId = locations.length > 0 ? locations[0].id : null;
+  }
+  if (locations.length === 0) {
+    showEmptyState();
+  } else {
+    updateLocationUI();
+    renderAll();
+  }
+  showToast(`${name} deleted`, '');
+}
 
 // ADD LOCATION
 function openAddLocation() {
@@ -1104,8 +1297,8 @@ function renderDashboard() {
       const s = getStatus(item.best_by);
       return `<tr>
         <td class="item-name">${item.name}</td>
-        <td><span style="font-size:12px;font-weight:700;color:var(--accent)">${currentLoc().name}</span></td>
-        <td><span class="item-cat">${item.cat}</span></td>
+        <td class="hide-mobile"><span style="font-size:12px;font-weight:700;color:var(--accent)">${currentLoc().name}</span></td>
+        <td class="hide-mobile"><span class="item-cat">${item.cat}</span></td>
         <td style="font-family:var(--mono)">${item.qty} ${item.unit}</td>
         <td class="date-cell">${formatDate(item.best_by)}</td>
         <td><span class="status-pill ${s.cls}">${s.label}</span></td>
@@ -1149,8 +1342,8 @@ function renderInventory() {
     const s = getStatus(item.best_by);
     return `<tr>
       <td class="item-name">${item.name}</td>
-      <td><span class="item-cat">${item.cat||'—'}</span></td>
-      <td style="color:var(--text2);font-size:13px">${item.storage||'Shelf'}</td>
+      <td class="hide-mobile"><span class="item-cat">${item.cat||'—'}</span></td>
+      <td class="hide-mobile" style="color:var(--text2);font-size:13px">${item.storage||'Shelf'}</td>
       <td>
         <div class="qty-adjust">
           <button class="qty-btn out" onclick="openAdjust(${item.id},'out')" title="Remove">−</button>
@@ -1190,23 +1383,33 @@ async function confirmAdjust() {
   if (!amt || amt <= 0) { showToast('Please enter a valid quantity',''); return; }
   const inv  = inventories[currentLocId];
   const item = inv.find(i => i.id === adjustTarget);
+  if (!item) { closeModal(); return; }
+
   if (dir === 'in') {
     item.qty += amt;
   } else {
     if (item.qty - amt < 0) { showToast('Not enough stock!',''); return; }
     item.qty = Math.round((item.qty - amt) * 100) / 100;
   }
+
   const logEntry = { time: new Date(), user: currentUser, locId: currentLocId, item: item.name, qty: amt, dir, note };
   activityLog.unshift(logEntry);
-  await updateItemQty(item.id, item.qty);
+
+  // If qty is 0, delete the item entirely
+  if (item.qty <= 0) {
+    await db.from('inventory').delete().eq('id', item.id);
+    showToast(`${item.name} removed from inventory`, '');
+  } else {
+    await updateItemQty(item.id, item.qty);
+    showToast(dir==='in' ? `+${amt} ${item.unit} added` : `−${amt} ${item.unit} removed`, dir==='in'?'purple':'gold');
+  }
+
   await logActivity(logEntry);
-  // Reload fresh from Supabase
   await loadData(true);
   closeModal();
   renderInventory();
   renderDashboard();
   updateLocationUI();
-  showToast(dir==='in' ? `+${amt} ${item.unit} added` : `−${amt} ${item.unit} removed`, dir==='in'?'purple':'gold');
 }
 document.getElementById('adjust-modal').addEventListener('click', e => { if(e.target===document.getElementById('adjust-modal')) closeModal(); });
 document.getElementById('add-loc-modal').addEventListener('click', e => { if(e.target===document.getElementById('add-loc-modal')) closeAddLocation(); });
@@ -1479,6 +1682,13 @@ function showToast(msg, type) {
   t.className = 'toast visible' + (type ? ' ' + type : '');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('visible'), 2800);
+}
+
+// ── FAQ ──────────────────────────────────────────────────────────────────────
+function toggleFaq(el) {
+  el.classList.toggle('open');
+  const answer = el.nextElementSibling;
+  answer.classList.toggle('open');
 }
 
 // ── NAVIGATE HELPERS ─────────────────────────────────────────────────────────
