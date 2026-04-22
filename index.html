@@ -818,6 +818,7 @@ let adjustTarget = null;
 // ── SUPABASE HELPERS ──────────────────────────────────────────────────────────
 async function loadData(silent = false) {
   if (!silent) showLoadingOverlay(true);
+  const previousLocId = currentLocId; // preserve current location
   try {
     const [locRes, itemRes, logRes] = await Promise.all([
       db.from('locations').select('*').order('created_at'),
@@ -849,7 +850,13 @@ async function loadData(silent = false) {
       locId: e.loc_id, item: e.item_name,
       qty: parseFloat(e.qty), dir: e.direction, note: e.note || ''
     }));
-    if (!currentLocId && locations.length > 0) currentLocId = locations[0].id;
+
+    // Restore previous location if still valid, otherwise use first
+    if (previousLocId && locations.find(l => l.id === previousLocId)) {
+      currentLocId = previousLocId;
+    } else if (!currentLocId && locations.length > 0) {
+      currentLocId = locations[0].id;
+    }
   } catch(e) {
     console.error('Load error', e);
     if (!silent) showToast('Could not connect to database', '');
@@ -1025,10 +1032,16 @@ async function confirmAddLocation() {
   if (!name) { showToast('Please enter a location name', ''); return; }
   const id = genLocId();
   const loc = { id, name, color: selectedColor };
-  locations.push(loc);
-  inventories[id] = [];
-  currentLocId = id;
+
   await saveLocation(loc);
+
+  // Reload from DB so IDs are exact
+  await loadData(true);
+
+  // Set currentLocId to the newly created location
+  const newLoc = locations.find(l => l.name === name);
+  if (newLoc) currentLocId = newLoc.id;
+
   closeAddLocation();
   updateLocationUI();
   renderAll();
@@ -1052,14 +1065,22 @@ function showTab(id, btn) {
 
 // ── STATUS ────────────────────────────────────────────────────────────────────
 function getStatus(best_by) {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const exp = new Date(best_by + 'T00:00:00');
-  const days = Math.round((exp - today) / 86400000);
-  if (days < 0) return { label: 'Expired', cls: 'status-expired', days };
-  if (days <= 7) return { label: 'Expiring Soon', cls: 'status-soon', days };
-  return { label: 'Fresh', cls: 'status-fresh', days };
+  if (!best_by) return { label: 'No Date', cls: 'status-fresh', days: 999 };
+  try {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const exp = new Date(best_by.substring(0,10) + 'T00:00:00');
+    if (isNaN(exp.getTime())) return { label: 'No Date', cls: 'status-fresh', days: 999 };
+    const days = Math.round((exp - today) / 86400000);
+    if (days < 0) return { label: 'Expired', cls: 'status-expired', days };
+    if (days <= 7) return { label: 'Expiring Soon', cls: 'status-soon', days };
+    return { label: 'Fresh', cls: 'status-fresh', days };
+  } catch(e) { return { label: 'No Date', cls: 'status-fresh', days: 999 }; }
 }
-function formatDate(d) { const p = d.split('-'); return `${p[1]}/${p[2]}/${p[0]}`; }
+function formatDate(d) {
+  if (!d) return '—';
+  try { const p = d.substring(0,10).split('-'); return `${p[1]}/${p[2]}/${p[0]}`; }
+  catch(e) { return d; }
+}
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard() {
@@ -1096,6 +1117,7 @@ function renderDashboard() {
 // ── INVENTORY ─────────────────────────────────────────────────────────────────
 function renderInventory() {
   if (!currentLocId || !currentLoc()) return;
+  try {
   document.getElementById('inv-subtitle').textContent = `Items at ${currentLoc().name}`;
   const search = document.getElementById('inv-search').value.toLowerCase();
   const catF   = document.getElementById('inv-filter-cat').value;
@@ -1115,7 +1137,7 @@ function renderInventory() {
     return statF==='fresh'?s==='Fresh':statF==='soon'?s==='Expiring Soon':s==='Expired';
   });
   if (sort === 'name') items.sort((a,b) => a.name.localeCompare(b.name));
-  if (sort === 'date') items.sort((a,b) => a.best_by.localeCompare(b.best_by));
+  if (sort === 'date') items.sort((a,b) => (a.best_by||'').localeCompare(b.best_by||''));
   if (sort === 'qty')  items.sort((a,b) => b.qty - a.qty);
 
   const tbody = document.getElementById('inv-body');
@@ -1127,14 +1149,14 @@ function renderInventory() {
     const s = getStatus(item.best_by);
     return `<tr>
       <td class="item-name">${item.name}</td>
-      <td><span class="item-cat">${item.cat}</span></td>
+      <td><span class="item-cat">${item.cat||'—'}</span></td>
       <td style="color:var(--text2);font-size:13px">${item.storage||'Shelf'}</td>
       <td>
         <div class="qty-adjust">
           <button class="qty-btn out" onclick="openAdjust(${item.id},'out')" title="Remove">−</button>
           <span class="qty-num">${item.qty}</span>
           <button class="qty-btn"     onclick="openAdjust(${item.id},'in')"  title="Add">+</button>
-          <span style="font-size:12px;color:var(--text2)">${item.unit}</span>
+          <span style="font-size:12px;color:var(--text2)">${item.unit||'ea'}</span>
         </div>
       </td>
       <td class="date-cell">${formatDate(item.best_by)}</td>
@@ -1142,6 +1164,7 @@ function renderInventory() {
       <td><button class="btn-sm btn-outline" style="font-size:12px;padding:6px 10px" onclick="openAdjust(${item.id},'in')">Adjust</button></td>
     </tr>`;
   }).join('');
+  } catch(err) { console.error('renderInventory error:', err); }
 }
 
 // ── ADJUST MODAL ──────────────────────────────────────────────────────────────
@@ -1505,4 +1528,3 @@ function renderAll() {
 </script>
 </body>
 </html>
-  
