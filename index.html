@@ -1175,12 +1175,10 @@ document.getElementById('add-loc-modal').addEventListener('click', e => { if(e.t
 document.addEventListener('keydown', e => { if(e.key==='Escape') { closeModal(); closeAddLocation(); } });
 
 // ── BARCODE SCANNER ───────────────────────────────────────────────────────────
-let scanStream = null;
-let scanAnimFrame = null;
+let zxingReader = null;
 
 async function startBarcodeScanner() {
   const video    = document.getElementById('scanner-video');
-  const canvas   = document.getElementById('scanner-canvas');
   const idle     = document.getElementById('scanner-idle');
   const overlay  = document.getElementById('scanner-overlay');
   const startBtn = document.getElementById('start-scan-btn');
@@ -1188,77 +1186,66 @@ async function startBarcodeScanner() {
   const status   = document.getElementById('scan-status');
 
   status.textContent = 'Starting camera...';
+  startBtn.style.display = 'none';
+  stopBtn.style.display = 'block';
 
   try {
-    scanStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false
-    });
-    video.srcObject = scanStream;
-    await video.play();
-    video.style.display = 'block';
-    idle.style.display = 'none';
-    overlay.style.display = 'block';
-    startBtn.style.display = 'none';
-    stopBtn.style.display = 'block';
-    status.textContent = 'Scanning — hold barcode steady inside the box...';
-
-    const ctx = canvas.getContext('2d');
-    const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = ZXing;
     const hints = new Map();
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-      BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
-      BarcodeFormat.UPC_A,  BarcodeFormat.UPC_E,
-      BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
-      BarcodeFormat.ITF, BarcodeFormat.QR_CODE
-    ]);
-    hints.set(DecodeHintType.TRY_HARDER, true);
-    const reader = new BrowserMultiFormatReader(hints);
+    const formats = [
+      ZXing.BarcodeFormat.EAN_13,
+      ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A,
+      ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.ITF,
+      ZXing.BarcodeFormat.QR_CODE,
+    ];
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
 
-    let lastAttempt = 0;
-    function scanFrame() {
-      if (!scanStream) return;
-      scanAnimFrame = requestAnimationFrame(scanFrame);
-      const now = Date.now();
-      if (now - lastAttempt < 300) return; // scan every 300ms
-      lastAttempt = now;
-      if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
-      canvas.width  = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      try {
-        const result = reader.decodeFromImageData(imageData);
-        if (result) {
-          stopBarcodeScanner();
-          lookupBarcode(result.getText());
-        }
-      } catch(e) {
-        // NotFoundException is normal - just means no barcode in frame yet
-      }
+    zxingReader = new ZXing.BrowserMultiFormatReader(hints, 300);
+
+    // Get device list and prefer back camera
+    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    let deviceId = undefined;
+    if (devices.length > 0) {
+      const back = devices.find(d => /back|rear|environment/i.test(d.label));
+      deviceId = back ? back.deviceId : devices[devices.length - 1].deviceId;
     }
-    scanFrame();
+
+    video.style.display = 'block';
+    idle.style.display  = 'none';
+    overlay.style.display = 'block';
+    status.textContent  = 'Hold barcode steady in the box...';
+
+    await zxingReader.decodeFromVideoDevice(deviceId, video, async (result, err) => {
+      if (result) {
+        const code = result.getText();
+        stopBarcodeScanner();
+        await lookupBarcode(code);
+      }
+    });
 
   } catch(err) {
-    status.textContent = 'Camera access denied — please allow camera in your browser settings, or enter barcode manually below.';
     console.error(err);
+    status.textContent = 'Camera unavailable — enter barcode manually below.';
     stopBarcodeScanner();
   }
 }
 
 function stopBarcodeScanner() {
-  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
-  if (scanAnimFrame) { cancelAnimationFrame(scanAnimFrame); scanAnimFrame = null; }
+  try { if (zxingReader) { zxingReader.reset(); zxingReader = null; } } catch(e) {}
   const video    = document.getElementById('scanner-video');
   const idle     = document.getElementById('scanner-idle');
   const overlay  = document.getElementById('scanner-overlay');
   const startBtn = document.getElementById('start-scan-btn');
   const stopBtn  = document.getElementById('stop-scan-btn');
-  if (video)   { video.style.display = 'none'; video.srcObject = null; }
+  if (video)   { video.srcObject = null; video.style.display = 'none'; }
   if (idle)    idle.style.display = 'block';
   if (overlay) overlay.style.display = 'none';
-  if (startBtn){ startBtn.style.display = 'block'; }
-  if (stopBtn) { stopBtn.style.display = 'none'; }
+  if (startBtn) startBtn.style.display = 'block';
+  if (stopBtn)  stopBtn.style.display  = 'none';
 }
 
 async function lookupBarcode(code) {
