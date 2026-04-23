@@ -717,9 +717,20 @@
             <div class="form-field">
               <label>Category</label>
               <select id="scan-cat">
-                <option>Pantry</option><option>Produce</option><option>Dairy</option>
-                <option>Meat</option><option>Frozen</option><option>Beverages</option>
-                <option>Personal Care</option><option>Other</option>
+                <option>Pantry</option>
+                <option>Produce</option>
+                <option>Dairy</option>
+                <option>Meat</option>
+                <option>Frozen</option>
+                <option>Beverages</option>
+                <option>Personal Care</option>
+                <option>Cleaning Supplies</option>
+                <option>Baby &amp; Kids</option>
+                <option>Paper Products</option>
+                <option>Pet Supplies</option>
+                <option>Medicine &amp; Health</option>
+                <option>Clothing</option>
+                <option>Other</option>
               </select>
             </div>
           </div>
@@ -1135,17 +1146,24 @@ function logout() {
 }
 
 // ── LOCATION SYSTEM ───────────────────────────────────────────────────────────
-function currentLoc() { return locations.find(l => l.id === currentLocId); }
-function currentInv() { return inventories[currentLocId] || []; }
+function currentLoc() { return locations.find(l => l.id == currentLocId); }
+function currentInv() {
+  // Try exact match first, then loose match
+  if (inventories[currentLocId]) return inventories[currentLocId];
+  const key = Object.keys(inventories).find(k => k == currentLocId);
+  return key ? inventories[key] : [];
+}
 
 function switchLocation(id) {
-  currentLocId = id;
-  if (!inventories[id]) inventories[id] = [];
+  // Convert to number if needed since DB returns bigint
+  const numId = isNaN(id) ? id : Number(id);
+  currentLocId = numId;
+  if (!inventories[numId]) inventories[numId] = [];
   updateLocationUI();
   renderAll();
   closeLocDropdown();
   const loc = currentLoc();
-  showToast(`Switched to ${loc.name}`, 'purple');
+  if (loc) showToast(`Switched to ${loc.name}`, 'purple');
 }
 
 function updateLocationUI() {
@@ -1164,14 +1182,15 @@ function renderLocDropdown() {
   const list = document.getElementById('loc-dd-list');
   list.innerHTML = locations.map(loc => {
     const cnt = (inventories[loc.id]||[]).length;
-    return `<div class="loc-dd-item ${loc.id===currentLocId?'active':''}" style="cursor:default">
+    const isActive = loc.id == currentLocId;
+    return `<div class="loc-dd-item ${isActive?'active':''}" style="cursor:default">
       <div class="loc-dd-dot" style="background:${loc.color}"></div>
-      <div class="loc-dd-info" onclick="switchLocation('${loc.id}')" style="cursor:pointer;flex:1">
+      <div class="loc-dd-info" onclick="switchLocation(${loc.id})" style="cursor:pointer;flex:1">
         <div class="loc-dd-name">${loc.name}</div>
         <div class="loc-dd-count">${cnt} item${cnt!==1?'s':''}</div>
       </div>
-      ${loc.id===currentLocId ? '<span class="loc-dd-check">✓</span>' : ''}
-      <button onclick="deleteLocation('${loc.id}','${loc.name}')" style="background:none;border:none;color:#c0392b;font-size:14px;cursor:pointer;padding:4px 8px;border-radius:4px;margin-left:4px;" title="Delete location">✕</button>
+      ${isActive ? '<span class="loc-dd-check">✓</span>' : ''}
+      <button onclick="deleteLocation(${loc.id},'${loc.name.replace(/'/g, "\'")}')" style="background:none;border:none;color:#c0392b;font-size:14px;cursor:pointer;padding:4px 8px;border-radius:4px;margin-left:4px;" title="Delete location">✕</button>
     </div>`;
   }).join('');
 }
@@ -1206,9 +1225,9 @@ function deleteLocation(id, name) {
     modal.classList.remove('open');
 
     // Remove from local state immediately
-    locations = locations.filter(l => l.id !== id);
+    locations = locations.filter(l => l.id != id);
     delete inventories[id];
-    if (currentLocId === id) {
+    if (currentLocId == id) {
       currentLocId = locations.length > 0 ? locations[0].id : null;
     }
 
@@ -1601,7 +1620,26 @@ async function lookupBarcode(code) {
     }
   } catch(e) { /* try next */ }
 
-  // Source 2: UPC Item DB (great for US grocery products)
+  // Source 2: Open Beauty Facts (cosmetics, personal care, hygiene)
+  if (!found) {
+    try {
+      const res  = await fetch(`https://world.openbeautyfacts.org/api/v2/product/${code}.json`);
+      const data = await res.json();
+      if (data.status === 1 && data.product) {
+        const p    = data.product;
+        const name = p.product_name || p.product_name_en || '';
+        const brand = p.brands || '';
+        const fullName = brand && name ? `${brand} ${name}` : (name || brand || '');
+        if (fullName) {
+          const cat = detectCategory(p.categories_tags || ['hygiene']);
+          setProductResult(fullName, cat, code);
+          found = true;
+        }
+      }
+    } catch(e) { /* try next */ }
+  }
+
+  // Source 3: UPC Item DB (great for US grocery products)
   if (!found) {
     try {
       const res  = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`);
@@ -1636,13 +1674,18 @@ function setProductResult(fullName, cat, code) {
 }
 
 function detectCategory(tags) {
-  const t = tags.join(' ').toLowerCase();
+  const t = (Array.isArray(tags) ? tags.join(' ') : String(tags)).toLowerCase();
   if (t.includes('dairy') || t.includes('milk') || t.includes('cheese') || t.includes('yogurt')) return 'Dairy';
-  if (t.includes('meat') || t.includes('chicken') || t.includes('beef') || t.includes('fish')) return 'Meat';
+  if (t.includes('meat') || t.includes('chicken') || t.includes('beef') || t.includes('fish') || t.includes('seafood')) return 'Meat';
   if (t.includes('frozen')) return 'Frozen';
-  if (t.includes('beverage') || t.includes('drink') || t.includes('juice') || t.includes('water')) return 'Beverages';
-  if (t.includes('fruit') || t.includes('vegetable') || t.includes('produce')) return 'Produce';
-  if (t.includes('hygiene') || t.includes('cosmetic') || t.includes('shampoo') || t.includes('soap')) return 'Personal Care';
+  if (t.includes('beverage') || t.includes('drink') || t.includes('juice') || t.includes('water') || t.includes('soda')) return 'Beverages';
+  if (t.includes('fruit') || t.includes('vegetable') || t.includes('produce') || t.includes('fresh')) return 'Produce';
+  if (t.includes('hygiene') || t.includes('cosmetic') || t.includes('shampoo') || t.includes('soap') || t.includes('deodorant') || t.includes('toothpaste') || t.includes('lotion')) return 'Personal Care';
+  if (t.includes('cleaning') || t.includes('detergent') || t.includes('bleach') || t.includes('disinfect')) return 'Cleaning Supplies';
+  if (t.includes('baby') || t.includes('infant') || t.includes('diaper') || t.includes('formula')) return 'Baby & Kids';
+  if (t.includes('paper') || t.includes('tissue') || t.includes('towel') || t.includes('napkin')) return 'Paper Products';
+  if (t.includes('pet') || t.includes('dog') || t.includes('cat') || t.includes('animal')) return 'Pet Supplies';
+  if (t.includes('medicine') || t.includes('vitamin') || t.includes('supplement') || t.includes('health')) return 'Medicine & Health';
   return 'Pantry';
 }
 
