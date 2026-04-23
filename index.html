@@ -1330,7 +1330,7 @@ function formatDate(d) {
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard() {
   if (!currentLocId || !currentLoc()) return;
-  const inv = currentInv();
+  const inv = currentInv().filter(i => i.qty > 0);
   const soon    = inv.filter(i => getStatus(i.best_by).label === 'Expiring Soon');
   const expired = inv.filter(i => getStatus(i.best_by).label === 'Expired');
   const cats    = new Set(inv.map(i => i.cat));
@@ -1374,7 +1374,7 @@ function renderInventory() {
   const curCat = catSel.value;
   catSel.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${c}" ${c===curCat?'selected':''}>${c}</option>`).join('');
 
-  let items = [...currentInv()];
+  let items = [...currentInv()].filter(i => i.qty > 0); // never show zero qty items
   if (search) items = items.filter(i => i.name.toLowerCase().includes(search));
   if (catF) items = items.filter(i => i.cat === catF);
   if (statF) items = items.filter(i => {
@@ -1434,7 +1434,7 @@ async function confirmAdjust() {
   const note = document.getElementById('modal-note').value;
   if (!amt || amt <= 0) { showToast('Please enter a valid quantity',''); return; }
   const inv  = inventories[currentLocId];
-  const item = inv.find(i => i.id === adjustTarget);
+  const item = inv.find(i => i.id == adjustTarget); // use == to handle int/string mismatch
   if (!item) { closeModal(); return; }
 
   if (dir === 'in') {
@@ -1447,9 +1447,12 @@ async function confirmAdjust() {
   const logEntry = { time: new Date(), user: currentUser, locId: currentLocId, item: item.name, qty: amt, dir, note };
   activityLog.unshift(logEntry);
 
-  // If qty is 0, delete the item entirely
+  // If qty is 0 or less, delete the item entirely
   if (item.qty <= 0) {
-    await db.from('inventory').delete().eq('id', item.id);
+    const { error } = await db.from('inventory').delete().eq('id', item.id);
+    if (error) console.error('Delete error:', error);
+    // Remove from local state immediately
+    inventories[currentLocId] = inv.filter(i => i.id != item.id);
     showToast(`${item.name} removed from inventory`, '');
   } else {
     await updateItemQty(item.id, item.qty);
@@ -1469,6 +1472,7 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') { closeModal();
 
 // ── BARCODE SCANNER (html5-qrcode - proven iPhone Safari support) ─────────────
 let html5QrCode = null;
+let scannerLocked = false; // prevent double-scans
 
 async function startBarcodeScanner() {
   const idle     = document.getElementById('scanner-idle');
@@ -1476,6 +1480,10 @@ async function startBarcodeScanner() {
   const startBtn = document.getElementById('start-scan-btn');
   const stopBtn  = document.getElementById('stop-scan-btn');
   const status   = document.getElementById('scan-status');
+
+  // Stop any existing instance first
+  await stopBarcodeScanner();
+  scannerLocked = false;
 
   status.textContent = 'Starting camera...';
   startBtn.style.display = 'none';
@@ -1504,8 +1512,18 @@ async function startBarcodeScanner() {
       { facingMode: 'environment' },
       config,
       async (decodedText) => {
-        await stopBarcodeScanner();
+        // Prevent duplicate scans of same barcode
+        if (scannerLocked) return;
+        scannerLocked = true;
+        status.textContent = 'Barcode detected! Looking up...';
         await lookupBarcode(decodedText);
+        // After lookup, restart scanner for next item after a short pause
+        setTimeout(async () => {
+          scannerLocked = false;
+          if (html5QrCode) {
+            status.textContent = 'Ready — scan next item or stop when done.';
+          }
+        }, 1500);
       },
       (errorMessage) => { /* scan errors are normal, ignore */ }
     );
@@ -1651,6 +1669,14 @@ async function saveScannedItem() {
     renderInventory();
     showSuccessBanner(name);
     clearScanForm();
+
+    // Automatically restart scanner for the next item
+    setTimeout(() => {
+      if (document.getElementById('tab-scan').style.display !== 'none') {
+        startBarcodeScanner();
+      }
+    }, 800);
+
   } finally {
     if (saveBtn) { saveBtn.textContent = 'Save to Inventory'; saveBtn.disabled = false; }
   }
