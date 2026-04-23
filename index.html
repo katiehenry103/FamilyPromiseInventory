@@ -1472,24 +1472,69 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') { closeModal();
 
 // ── BARCODE SCANNER (html5-qrcode - proven iPhone Safari support) ─────────────
 let html5QrCode = null;
-let scannerLocked = false; // prevent double-scans
+let scannerLocked = false;
+
+async function stopBarcodeScanner() {
+  try {
+    if (html5QrCode) {
+      await html5QrCode.stop();
+      html5QrCode.clear();
+      html5QrCode = null;
+    }
+  } catch(e) {}
+
+  // Fully reset the scanner-box element so html5-qrcode starts fresh
+  const box = document.getElementById('scanner-box');
+  if (box) {
+    box.innerHTML = `
+      <div id="scanner-idle" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;height:100%;">
+        <div style="width:56px;height:56px;background:rgba(255,255,255,0.08);border-radius:12px;display:flex;align-items:center;justify-content:center;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.8">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <line x1="14" y1="14" x2="14" y2="14.01"/><line x1="17" y1="14" x2="21" y2="14"/>
+            <line x1="14" y1="17" x2="14" y2="21"/><line x1="17" y1="17" x2="21" y2="21"/>
+          </svg>
+        </div>
+        <div style="color:rgba(255,255,255,0.7);font-size:14px;font-weight:600;">Ready to Scan</div>
+        <div style="color:rgba(255,255,255,0.35);font-size:12px;">Tap Start Scanner below</div>
+      </div>
+      <div id="scanner-overlay" style="display:none;position:absolute;inset:0;pointer-events:none;">
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);width:72%;height:22%;border:2.5px solid #f5c518;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);">
+          <div style="position:absolute;top:-3px;left:-3px;width:20px;height:20px;border-top:4px solid white;border-left:4px solid white;border-radius:3px 0 0 0;"></div>
+          <div style="position:absolute;top:-3px;right:-3px;width:20px;height:20px;border-top:4px solid white;border-right:4px solid white;border-radius:0 3px 0 0;"></div>
+          <div style="position:absolute;bottom:-3px;left:-3px;width:20px;height:20px;border-bottom:4px solid white;border-left:4px solid white;border-radius:0 0 0 3px;"></div>
+          <div style="position:absolute;bottom:-3px;right:-3px;width:20px;height:20px;border-bottom:4px solid white;border-right:4px solid white;border-radius:0 0 3px 0;"></div>
+        </div>
+        <div style="position:absolute;bottom:14px;left:0;right:0;text-align:center;color:white;font-size:12px;background:rgba(0,0,0,0.55);padding:7px;">Align barcode in the box</div>
+      </div>`;
+  }
+
+  const startBtn = document.getElementById('start-scan-btn');
+  const stopBtn  = document.getElementById('stop-scan-btn');
+  const status   = document.getElementById('scan-status');
+  if (startBtn) startBtn.style.display = 'block';
+  if (stopBtn)  stopBtn.style.display  = 'none';
+  if (status)   status.textContent     = '';
+  scannerLocked = false;
+}
 
 async function startBarcodeScanner() {
-  const idle     = document.getElementById('scanner-idle');
-  const overlay  = document.getElementById('scanner-overlay');
   const startBtn = document.getElementById('start-scan-btn');
   const stopBtn  = document.getElementById('stop-scan-btn');
   const status   = document.getElementById('scan-status');
 
-  // Stop any existing instance first
+  // Always stop and reset first
   await stopBarcodeScanner();
-  scannerLocked = false;
 
   status.textContent = 'Starting camera...';
   startBtn.style.display = 'none';
   stopBtn.style.display  = 'block';
-  idle.style.display     = 'none';
-  overlay.style.display  = 'block';
+
+  const overlay = document.getElementById('scanner-overlay');
+  const idle    = document.getElementById('scanner-idle');
+  if (overlay) overlay.style.display = 'block';
+  if (idle)    idle.style.display    = 'none';
 
   try {
     html5QrCode = new Html5Qrcode('scanner-box');
@@ -1512,48 +1557,21 @@ async function startBarcodeScanner() {
       { facingMode: 'environment' },
       config,
       async (decodedText) => {
-        // Prevent duplicate scans of same barcode
         if (scannerLocked) return;
         scannerLocked = true;
         status.textContent = 'Barcode detected! Looking up...';
         await lookupBarcode(decodedText);
-        // After lookup, restart scanner for next item after a short pause
-        setTimeout(async () => {
-          scannerLocked = false;
-          if (html5QrCode) {
-            status.textContent = 'Ready — scan next item or stop when done.';
-          }
-        }, 1500);
+        scannerLocked = false;
+        status.textContent = 'Ready — scan next item or fill in details below.';
       },
-      (errorMessage) => { /* scan errors are normal, ignore */ }
+      () => {}
     );
     status.textContent = 'Hold barcode steady in the box...';
   } catch(err) {
     console.error(err);
     status.textContent = 'Camera unavailable — enter barcode number manually below.';
-    startBtn.style.display = 'block';
-    stopBtn.style.display  = 'none';
-    idle.style.display     = 'block';
-    overlay.style.display  = 'none';
+    await stopBarcodeScanner();
   }
-}
-
-async function stopBarcodeScanner() {
-  try {
-    if (html5QrCode) {
-      await html5QrCode.stop();
-      html5QrCode.clear();
-      html5QrCode = null;
-    }
-  } catch(e) {}
-  const idle     = document.getElementById('scanner-idle');
-  const overlay  = document.getElementById('scanner-overlay');
-  const startBtn = document.getElementById('start-scan-btn');
-  const stopBtn  = document.getElementById('stop-scan-btn');
-  if (idle)     idle.style.display     = 'block';
-  if (overlay)  overlay.style.display  = 'none';
-  if (startBtn) startBtn.style.display = 'block';
-  if (stopBtn)  stopBtn.style.display  = 'none';
 }
 
 async function lookupBarcode(code) {
@@ -1675,7 +1693,7 @@ async function saveScannedItem() {
       if (document.getElementById('tab-scan').style.display !== 'none') {
         startBarcodeScanner();
       }
-    }, 800);
+    }, 1000);
 
   } finally {
     if (saveBtn) { saveBtn.textContent = 'Save to Inventory'; saveBtn.disabled = false; }
