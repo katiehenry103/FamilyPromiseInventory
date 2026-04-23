@@ -1639,7 +1639,26 @@ async function lookupBarcode(code) {
     } catch(e) { /* try next */ }
   }
 
-  // Source 3: UPC Item DB (great for US grocery products)
+  // Source 3: Open Products Facts (cleaning supplies, paper products, diapers, household)
+  if (!found) {
+    try {
+      const res  = await fetch(`https://world.openproductsfacts.org/api/v2/product/${code}.json`);
+      const data = await res.json();
+      if (data.status === 1 && data.product) {
+        const p    = data.product;
+        const name = p.product_name || p.product_name_en || '';
+        const brand = p.brands || '';
+        const fullName = brand && name ? `${brand} ${name}` : (name || brand || '');
+        if (fullName) {
+          const cat = detectCategory(p.categories_tags || []);
+          setProductResult(fullName, cat, code);
+          found = true;
+        }
+      }
+    } catch(e) { /* try next */ }
+  }
+
+  // Source 4: UPC Item DB (great for US grocery products)
   if (!found) {
     try {
       const res  = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`);
@@ -1680,12 +1699,12 @@ function detectCategory(tags) {
   if (t.includes('frozen')) return 'Frozen';
   if (t.includes('beverage') || t.includes('drink') || t.includes('juice') || t.includes('water') || t.includes('soda')) return 'Beverages';
   if (t.includes('fruit') || t.includes('vegetable') || t.includes('produce') || t.includes('fresh')) return 'Produce';
-  if (t.includes('hygiene') || t.includes('cosmetic') || t.includes('shampoo') || t.includes('soap') || t.includes('deodorant') || t.includes('toothpaste') || t.includes('lotion')) return 'Personal Care';
-  if (t.includes('cleaning') || t.includes('detergent') || t.includes('bleach') || t.includes('disinfect')) return 'Cleaning Supplies';
-  if (t.includes('baby') || t.includes('infant') || t.includes('diaper') || t.includes('formula')) return 'Baby & Kids';
-  if (t.includes('paper') || t.includes('tissue') || t.includes('towel') || t.includes('napkin')) return 'Paper Products';
+  if (t.includes('diaper') || t.includes('nappy') || t.includes('baby') || t.includes('infant') || t.includes('formula') || t.includes('wipe')) return 'Baby & Kids';
+  if (t.includes('paper') || t.includes('tissue') || t.includes('towel') || t.includes('napkin') || t.includes('toilet')) return 'Paper Products';
+  if (t.includes('cleaning') || t.includes('detergent') || t.includes('bleach') || t.includes('disinfect') || t.includes('laundry') || t.includes('dishwash') || t.includes('cleaner') || t.includes('lysol') || t.includes('spray')) return 'Cleaning Supplies';
+  if (t.includes('hygiene') || t.includes('cosmetic') || t.includes('shampoo') || t.includes('soap') || t.includes('deodorant') || t.includes('toothpaste') || t.includes('lotion') || t.includes('conditioner') || t.includes('body wash') || t.includes('razor')) return 'Personal Care';
   if (t.includes('pet') || t.includes('dog') || t.includes('cat') || t.includes('animal')) return 'Pet Supplies';
-  if (t.includes('medicine') || t.includes('vitamin') || t.includes('supplement') || t.includes('health')) return 'Medicine & Health';
+  if (t.includes('medicine') || t.includes('vitamin') || t.includes('supplement') || t.includes('health') || t.includes('pain') || t.includes('cold') || t.includes('flu')) return 'Medicine & Health';
   return 'Pantry';
 }
 
